@@ -27,4 +27,5 @@ INSTALL DI ANDROID:
 Catatan:
 - PWA membutuhkan HTTPS. GitHub Pages sudah HTTPS.
 - Data Vault tetap memakai Supabase yang sudah dikonfigurasi.
+- Vault mendukung penyimpanan link, file, dan catatan pribadi pada tabel `items`; catatan disimpan sebagai `type: note` dengan isi di kolom `value`.
 - Service worker hanya menangani shell aplikasi; request Supabase tetap ke jaringan.
