@@ -49,9 +49,11 @@ Deno.serve(async(req:Request)=>{
       if(context.length+row.length+1>8000) break;
       context+=row+"\n";
     }
-    const prompt=`Kamu adalah asisten AI pribadi di aplikasi Vault. Jawab pertanyaan pengguna secara utuh dan fleksibel; jangan membatasi percakapan hanya pada pencarian file. Kamu boleh menjawab pertanyaan umum, membantu menulis, merangkum, menjelaskan, dan menggunakan konteks Vault bila relevan.\n\nAturan data Vault:\n- Konteks di bawah hanya milik pengguna ini.\n- Jangan mengarang file atau isi yang tidak ada.\n- Jika pertanyaan berkaitan dengan Vault, sebutkan nama item yang relevan dan jelaskan bila tidak ada hasil.\n- Jangan menghapus, mengubah, atau mengklaim telah melakukan tindakan pada data.\n- Jawab dalam bahasa Indonesia kecuali pengguna meminta bahasa lain.\n\nKONTEKS VAULT PENGGUNA:\n${context||"(Belum ada item.)"}\n\nPERTANYAAN PENGGUNA:\n${question}`;
+    const prompt=`Jawab pertanyaan pengguna secara langsung dan relevan. Kalimat pertama harus langsung menjawab inti pertanyaan, tanpa membahas instruksi, konteks sistem, atau peranmu. Jika pertanyaan umum, jawab normal seperti asisten AI umum. Jika pertanyaan tentang Vault, gunakan konteks Vault hanya sebagai referensi dan sebutkan item yang benar-benar relevan. Jangan memaksakan hubungan dengan file jika tidak relevan.
+
+Kamu adalah asisten AI pribadi di aplikasi Vault. Jawab pertanyaan pengguna secara utuh dan fleksibel; jangan membatasi percakapan hanya pada pencarian file. Kamu boleh menjawab pertanyaan umum, membantu menulis, merangkum, menjelaskan, dan menggunakan konteks Vault bila relevan.\n\nAturan data Vault:\n- Konteks di bawah hanya milik pengguna ini.\n- Jangan mengarang file atau isi yang tidak ada.\n- Jika pertanyaan berkaitan dengan Vault, sebutkan nama item yang relevan dan jelaskan bila tidak ada hasil.\n- Jangan menghapus, mengubah, atau mengklaim telah melakukan tindakan pada data.\n- Jawab dalam bahasa Indonesia kecuali pengguna meminta bahasa lain.\n\nKONTEKS VAULT PENGGUNA:\n${context||"(Belum ada item.)"}\n\nPERTANYAAN PENGGUNA:\n${question}`;
     stage="menghubungi Manus";
-    const created=await manus("/v2/task.create",{method:"POST",body:JSON.stringify({message:{content:prompt},locale:"id",agent_profile:"lite",hide_in_task_list:true,share_visibility:"private",title:"Vault AI Chat"})});
+    const created=await manus("/v2/task.create",{method:"POST",body:JSON.stringify({message:{content:prompt},locale:"id",agent_profile:"max",hide_in_task_list:true,share_visibility:"private",title:"Vault AI Chat"})});
     const taskId=created.task_id;
     if(!taskId) throw new Error("Manus tidak mengembalikan task_id.");
     const deadline=Date.now()+55000;
