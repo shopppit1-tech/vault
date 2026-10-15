@@ -45,8 +45,8 @@ Deno.serve(async(req:Request)=>{
     // Keep the prompt safely below Manus' request limit while retaining every item title and metadata.
     let context="";
     for(const item of (items??[])){
-      const row=JSON.stringify({id:item.id,type:item.type,name:item.name,content_or_url:String(item.value??"").slice(0,700),category:item.category,favorite:item.favorite,created_at:item.created_at,mime_type:item.mime_type,size:item.size});
-      if(context.length+row.length+1>18000) break;
+      const row=JSON.stringify({id:item.id,type:item.type,name:item.name,content_or_url:String(item.value??"").slice(0,300),category:item.category,favorite:item.favorite,created_at:item.created_at,mime_type:item.mime_type,size:item.size});
+      if(context.length+row.length+1>8000) break;
       context+=row+"\n";
     }
     const prompt=`Kamu adalah asisten AI pribadi di aplikasi Vault. Jawab pertanyaan pengguna secara utuh dan fleksibel; jangan membatasi percakapan hanya pada pencarian file. Kamu boleh menjawab pertanyaan umum, membantu menulis, merangkum, menjelaskan, dan menggunakan konteks Vault bila relevan.\n\nAturan data Vault:\n- Konteks di bawah hanya milik pengguna ini.\n- Jangan mengarang file atau isi yang tidak ada.\n- Jika pertanyaan berkaitan dengan Vault, sebutkan nama item yang relevan dan jelaskan bila tidak ada hasil.\n- Jangan menghapus, mengubah, atau mengklaim telah melakukan tindakan pada data.\n- Jawab dalam bahasa Indonesia kecuali pengguna meminta bahasa lain.\n\nKONTEKS VAULT PENGGUNA:\n${context||"(Belum ada item.)"}\n\nPERTANYAAN PENGGUNA:\n${question}`;
