@@ -56,6 +56,7 @@ linear-gradient(145deg,#f4edff,#effaff 55%,#fff)}
 .password-eye{position:absolute;right:10px;bottom:7px;width:38px;height:38px;border:0;border-radius:10px;background:transparent;color:#737b91;font-size:20px;display:grid;place-items:center}
 .password-eye:hover{background:#f0eeff;color:#5c48f4}
 textarea{width:100%;margin-top:6px;border:1px solid #dfe3ef;border-radius:13px;padding:14px;background:#fbfcff;color:var(--ink);outline:none;resize:vertical;min-height:130px}textarea:focus{border-color:#887aff;box-shadow:0 0 0 4px #6f5bf415}
+.ai-launch{position:fixed;right:22px;bottom:24px;z-index:35;width:58px;height:58px;border:0;border-radius:50%;background:linear-gradient(135deg,#5d49f4,#735dff);color:#fff;font-size:25px;box-shadow:0 12px 28px #5d49f455}.ai-panel{position:fixed;right:22px;bottom:94px;z-index:40;width:min(390px,calc(100vw - 28px));height:min(600px,calc(100dvh - 120px));display:none;flex-direction:column;background:#fff;border:1px solid #e5e7f1;border-radius:22px;box-shadow:0 24px 70px #25275a30;overflow:hidden}.ai-panel.show{display:flex}.ai-head{display:flex;align-items:center;justify-content:space-between;padding:15px 17px;background:linear-gradient(135deg,#5d49f4,#735dff);color:#fff}.ai-head b{font-size:15px}.ai-head small{display:block;opacity:.8;font-size:10px;margin-top:3px}.ai-close{border:0;background:#ffffff25;color:#fff;border-radius:10px;width:32px;height:32px;font-size:20px}.ai-messages{flex:1;overflow:auto;padding:14px;background:#f8f8ff;display:grid;align-content:start;gap:10px}.ai-msg{max-width:88%;padding:10px 12px;border-radius:14px;font-size:12px;line-height:1.5;white-space:pre-wrap;overflow-wrap:anywhere}.ai-msg.user{justify-self:end;background:#6754f5;color:#fff;border-bottom-right-radius:4px}.ai-msg.bot{justify-self:start;background:#fff;color:#272b45;border:1px solid #e7e8f0;border-bottom-left-radius:4px}.ai-compose{display:flex;gap:8px;padding:11px;border-top:1px solid #e8e9f2;background:#fff}.ai-compose textarea{min-height:44px;height:44px;max-height:110px;margin:0;resize:none;padding:11px;border-radius:12px;font-size:12px}.ai-send{width:48px;border:0;border-radius:12px;background:#5d49f4;color:#fff;font-size:18px}.ai-send:disabled{opacity:.55}@media(max-width:700px){.ai-launch{right:14px;bottom:80px}.ai-panel{right:14px;bottom:145px;width:calc(100vw - 28px);height:min(580px,calc(100dvh - 180px))}}
 </style>
 </head>
 <body>
@@ -178,6 +179,13 @@ textarea{width:100%;margin-top:6px;border:1px solid #dfe3ef;border-radius:13px;p
 </div>
 
 <div id="toast" class="toast hidden"></div>
+<button class="ai-launch" type="button" onclick="toggleAiChat()" aria-label="Buka AI Vault">✦</button>
+<div id="aiPanel" class="ai-panel" aria-label="AI Vault">
+  <div class="ai-head"><div><b>AI Vault</b><small>Tanya apa saja tentang Vault atau topik umum</small></div><button class="ai-close" type="button" onclick="toggleAiChat()">×</button></div>
+  <div id="aiMessages" class="ai-messages"><div class="ai-msg bot">Halo. Saya bisa membantu mencari dan merangkum isi Vault, atau menjawab pertanyaan umum.</div></div>
+  <div class="ai-compose"><textarea id="aiInput" placeholder="Tulis pertanyaan..." aria-label="Pertanyaan untuk AI"></textarea><button id="aiSend" class="ai-send" type="button" onclick="sendAiMessage()">↑</button></div>
+</div>
+
 
 <script>
 
@@ -247,6 +255,12 @@ function requestDelete(id,type,path){ask("Hapus item?","Item ini akan dihapus da
 async function deleteItem(id,type,path){let r=await db.from("items").delete().eq("id",id);if(r.error){toast(r.error.message);return}if(type==="file"&&path)await db.storage.from(BUCKET).remove([path]);toast("Item berhasil dihapus");favoritesOnly?showFavorites():loadItems()}
 function requestDownload(id){ask("Unduh file?","File akan diunduh ke perangkat kamu. Lanjutkan?","download",()=>downloadFile(id))}
 async function downloadFile(id){let x=items.find(v=>v.id===id);if(!x)return;let r=await db.storage.from(BUCKET).createSignedUrl(x.storage_path,120);if(r.error){toast(r.error.message);return}let a=document.createElement("a");a.href=r.data.signedUrl;a.download=x.value;a.target="_blank";document.body.appendChild(a);a.click();a.remove();toast("Download dimulai")}
+
+function toggleAiChat(){const panel=$("aiPanel");panel.classList.toggle("show");if(panel.classList.contains("show"))$("aiInput").focus()}
+function addAiMessage(text,kind){const el=document.createElement("div");el.className="ai-msg "+kind;el.textContent=text;$("aiMessages").appendChild(el);$("aiMessages").scrollTop=$("aiMessages").scrollHeight}
+async function sendAiMessage(){const input=$("aiInput"),send=$("aiSend"),question=input.value.trim();if(!question||send.disabled)return;let {data:{session}}=await db.auth.getSession();if(!session){addAiMessage("Sesi login habis. Silakan login kembali.","bot");return}addAiMessage(question,"user");input.value="";send.disabled=true;send.textContent="…";const thinking=document.createElement("div");thinking.className="ai-msg bot";thinking.textContent="Sedang berpikir…";$("aiMessages").appendChild(thinking);try{const r=await fetch(SUPABASE_URL+"/functions/v1/vault-ai-chat",{method:"POST",headers:{"Content-Type":"application/json",Authorization:"Bearer "+session.access_token,apikey:SUPABASE_KEY},body:JSON.stringify({question})});const data=await r.json();thinking.remove();if(!r.ok)throw Error(data.error||"AI gagal menjawab.");addAiMessage(data.answer||"AI tidak mengembalikan jawaban.","bot")}catch(e){thinking.textContent=e.message||"Gagal menghubungi AI."}finally{send.disabled=false;send.textContent="↑"}}
+$("aiInput").addEventListener("keydown",e=>{if(e.key==="Enter"&&!e.shiftKey){e.preventDefault();sendAiMessage()}})
+
 db.auth.onAuthStateChange((e,s)=>{if(s)enterApp();else{$("auth").classList.remove("hidden");$("app").classList.add("hidden")}})
 
 </script>
