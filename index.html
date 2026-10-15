@@ -198,14 +198,50 @@ $("switchBtn").onclick=()=>{registerMode=!registerMode;$("authTitle").textConten
 $("authForm").onsubmit=async e=>{e.preventDefault();$("authBtn").disabled=true;let email=$("email").value.trim(),password=$("password").value;let r=registerMode?await db.auth.signUp({email,password}):await db.auth.signInWithPassword({email,password});$("authBtn").disabled=false;if(r.error){toast(r.error.message);return}if(registerMode&&!r.data.session){toast("Akun dibuat. Cek email verifikasi.");return}enterApp()}
 async function enterApp(){let {data:{user}}=await db.auth.getUser();if(!user)return;$("auth").classList.add("hidden");$("app").classList.remove("hidden");$("account").textContent=user.email;loadItems()}
 async function logout(){await db.auth.signOut()}
-function buildFilters(){let groups=[...new Set(items.map(x=>x.category||"Umum"))].sort();$("filters").innerHTML=`<button class="filter ${currentType==="all"?"active":""}" onclick="setType('all')">Semua</button><button class="filter ${currentType==="link"?"active":""}" onclick="setType('link')">🔗 Link</button><button class="filter ${currentType==="file"?"active":""}" onclick="setType('file')">📁 File</button>`+groups.map(g=>`<button class="filter ${currentGroup===g?"active":""}" onclick="setGroup('${esc(g)}')">${esc(g)}</button>`).join("")}
+function buildFilters(){let groups=[...new Set(items.map(x=>x.category||"Umum"))].sort();$("filters").innerHTML=`<button class="filter ${currentType==="all"?"active":""}" onclick="setType('all')">Semua</button><button class="filter ${currentType==="link"?"active":""}" onclick="setType('link')">🔗 Link</button><button class="filter ${currentType==="file"?"active":""}" onclick="setType('file')">📁 File</button><button class="filter ${currentType==="note"?"active":""}" onclick="setType('note')">📝 Catatan</button>`+groups.map(g=>`<button class="filter ${currentGroup===g?"active":""}" onclick="setGroup('${esc(g)}')">${esc(g)}</button>`).join("")}
 function setType(t){currentType=t;currentGroup="all";favoritesOnly=false;$("sectionTitle").textContent="Koleksi";buildFilters();render()}
 function setGroup(g){currentGroup=g;favoritesOnly=false;$("sectionTitle").textContent="Kelompok: "+g;buildFilters();render()}
 async function loadItems(){favoritesOnly=false;currentType="all";currentGroup="all";$("sectionTitle").textContent="Koleksi";let r=await db.from("items").select("*").order("created_at",{ascending:false});if(r.error){toast(r.error.message);return}items=r.data||[];buildFilters();render()}
 async function showFavorites(){favoritesOnly=true;currentType="all";currentGroup="all";$("sectionTitle").textContent="Favorit";let r=await db.from("items").select("*").eq("favorite",true).order("created_at",{ascending:false});if(r.error){toast(r.error.message);return}items=r.data||[];buildFilters();render()}
 function render(){let q=$("search").value.toLowerCase();let list=items.filter(x=>(currentType==="all"||x.type===currentType)&&(currentGroup==="all"||(x.category||"Umum")===currentGroup)&&(x.name+" "+x.value+" "+(x.category||"")).toLowerCase().includes(q));if(!list.length){$("grid").innerHTML='<div class="empty"><b>Tidak ada koleksi</b>Belum ada item pada kelompok ini.</div>';return}$("grid").innerHTML=list.map(x=>`<article class="card"><div class="cardtop"><div class="type">${x.type==="file"?"📄":x.type==="note"?"📝":"🔗"}</div><div><h3>${esc(x.name)}</h3><div class="url">${esc(x.value)}</div></div></div><span class="group">${esc(x.category||"Umum")}</span><div class="desc">${x.type==="file"?formatSize(x.size):x.type==="note"?"Catatan tersimpan":"Link tersimpan"} · ${new Date(x.created_at).toLocaleDateString("id-ID")}</div><div class="meta"><span>${x.favorite?"Favorit":"Tersimpan"}</span><div class="mini"><button onclick="toggleFav('${x.id}',${!!x.favorite})">${x.favorite?"★":"☆"}</button>${x.type==="file"?`<button onclick="requestDownload('${x.id}')">↓</button>`:x.type==="link"?`<button onclick="window.open('${esc(x.value)}','_blank')">↗</button>`:""}<button class="danger" onclick="requestDelete('${x.id}','${x.type}','${esc(x.storage_path||"")}')">×</button></div></div></article>`).join("")}
 $("search").oninput=render;
-async function saveItem(){$("saveBtn").disabled=true;try{let {data:{user}}=await db.auth.getUser();if(!user)throw Error("Sesi login habis.");if(mode==="link"){let name=$("linkName").value.trim(),url=$("linkUrl").value.trim();if(!name||!url)throw Error("Isi nama dan URL.");if(!/^https?:\/\//i.test(url))url="https://"+url;let r=await db.from("items").insert({user_id:user.id,type:"link",name,value:url,category:$("category").value});if(r.error)throw r.error}else if(mode==="note"){let name=$("noteName").value.trim(),content=$("noteContent").value.trim();if(!name||!content)throw Error("Isi judul dan isi catatan.");let r=await db.from("items").insert({user_id:user.id,type:"note",name,value:content,category:$("category").value});if(r.error)throw r.error}else{let f=$("fileInput").files[0];if(!f)throw Error("Pilih file.");if(f.size>50*1024*1024)throw Error("Maksimal file 50 MB.");let safe=f.name.replace(/[^\w.\-() ]/g,"_"),path=user.id+"/"+crypto.randomUUID()+"-"+safe;let up=await db.storage.from(BUCKET).upload(path,f,{contentType:f.type||"application/octet-stream"});if(up.error)throw up.error;let r=await db.from("items").insert({user_id:user.id,type:"file",name:$("fileLabel").value.trim()||f.name,value:f.name,storage_path:path,mime_type:f.type,size:f.size,category:$("category").value});if(r.error){await db.storage.from(BUCKET).remove([path]);throw r.error}}closeModal();toast("Berhasil disimpan");await loadItems()}catch(e){toast(e.message||"Gagal menyimpan")}$('saveBtn').disabled=false}
+async function saveItem(){
+  const button=$("saveBtn");
+  button.disabled=true;
+  try{
+    const {data:{user}}=await db.auth.getUser();
+    if(!user) throw Error("Sesi login habis.");
+    let payload;
+    if(mode==="link"){
+      const name=$("linkName").value.trim();
+      let url=$("linkUrl").value.trim();
+      if(!name||!url) throw Error("Isi nama dan URL.");
+      if(!/^https?:\/\//i.test(url)) url="https://"+url;
+      payload={user_id:user.id,type:"link",name,value:url,category:$("category").value};
+    }else if(mode==="note"){
+      const name=$("noteName").value.trim();
+      const content=$("noteContent").value.trim();
+      if(!name||!content) throw Error("Isi judul dan isi catatan.");
+      payload={user_id:user.id,type:"note",name,value:content,category:$("category").value};
+    }else{
+      const f=$("fileInput").files[0];
+      if(!f) throw Error("Pilih file.");
+      if(f.size>50*1024*1024) throw Error("Maksimal file 50 MB.");
+      const safe=f.name.replace(/[^\w.\-() ]/g,"_");
+      const path=user.id+"/"+crypto.randomUUID()+"-"+safe;
+      const up=await db.storage.from(BUCKET).upload(path,f,{contentType:f.type||"application/octet-stream"});
+      if(up.error) throw up.error;
+      payload={user_id:user.id,type:"file",name:$("fileLabel").value.trim()||f.name,value:f.name,storage_path:path,mime_type:f.type,size:f.size,category:$("category").value};
+      const r=await db.from("items").insert(payload);
+      if(r.error){await db.storage.from(BUCKET).remove([path]);throw r.error;}
+      closeModal();toast("Berhasil disimpan");await loadItems();return;
+    }
+    const r=await db.from("items").insert(payload);
+    if(r.error) throw r.error;
+    closeModal();toast("Berhasil disimpan");await loadItems();
+  }catch(e){toast(e.message||"Gagal menyimpan");}
+  finally{button.disabled=false;}
+}
 async function toggleFav(id,current){let r=await db.from("items").update({favorite:!current}).eq("id",id);if(r.error)toast(r.error.message);else favoritesOnly?showFavorites():loadItems()}
 function requestDelete(id,type,path){ask("Hapus item?","Item ini akan dihapus dari koleksi kamu. "+(type==="file"?"File di cloud juga akan dihapus.":"Tindakan ini tidak bisa dibatalkan."),"delete",()=>deleteItem(id,type,path))}
 async function deleteItem(id,type,path){let r=await db.from("items").delete().eq("id",id);if(r.error){toast(r.error.message);return}if(type==="file"&&path)await db.storage.from(BUCKET).remove([path]);toast("Item berhasil dihapus");favoritesOnly?showFavorites():loadItems()}
