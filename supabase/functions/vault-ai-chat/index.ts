@@ -19,7 +19,7 @@ function extractAssistantText(events:any[]):string{
 async function manus(path:string,init:RequestInit={}){
   const key=Deno.env.get("MANUS_API_KEY");
   if(!key) throw new Error("MANUS_API_KEY belum dipasang di Supabase Edge Function Secrets.");
-  const response=await fetch(`https://api.manus.ai${path}`,{...init,headers:{"x-manus-api-key":key,"Content-Type":"application/json",...(init.headers??{})}});
+  const authHeader=key.startsWith("Bearer ")?{Authorization:key}:{"x-manus-api-key":key};const response=await fetch(`https://api.manus.ai${path}`,{...init,headers:{...authHeader,"Content-Type":"application/json",...(init.headers??{})}});
   const data=await response.json();
   if(!response.ok||data?.ok===false) throw new Error(data?.error?.message||`Manus API error (${response.status})`);
   return data;
