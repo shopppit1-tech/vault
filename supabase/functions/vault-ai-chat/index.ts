@@ -27,7 +27,9 @@ async function manus(path:string,init:RequestInit={}){
 Deno.serve(async(req:Request)=>{
   if(req.method==="OPTIONS") return new Response("ok",{headers:corsHeaders});
   if(req.method!=="POST") return json({error:"Method tidak didukung."},405);
+  let stage="mulai";
   try{
+    stage="validasi sesi";
     const auth=req.headers.get("Authorization");
     if(!auth?.startsWith("Bearer ")) return json({error:"Sesi login diperlukan."},401);
     const supabase=createClient(Deno.env.get("SUPABASE_URL")??"",Deno.env.get("SUPABASE_ANON_KEY")??"",{global:{headers:{Authorization:auth}}});
@@ -37,6 +39,7 @@ Deno.serve(async(req:Request)=>{
     const question=typeof body?.question==="string"?body.question.trim():"";
     if(!question) return json({error:"Pertanyaan tidak boleh kosong."},400);
     if(question.length>12000) return json({error:"Pertanyaan terlalu panjang."},400);
+    stage="membaca data Vault";
     const {data:items,error:itemsError}=await supabase.from("items").select("id,type,name,value,category,favorite,created_at,mime_type,size").order("created_at",{ascending:false}).limit(500);
     if(itemsError) throw itemsError;
     // Keep the prompt safely below Manus' request limit while retaining every item title and metadata.
@@ -47,10 +50,12 @@ Deno.serve(async(req:Request)=>{
       context+=row+"\n";
     }
     const prompt=`Kamu adalah asisten AI pribadi di aplikasi Vault. Jawab pertanyaan pengguna secara utuh dan fleksibel; jangan membatasi percakapan hanya pada pencarian file. Kamu boleh menjawab pertanyaan umum, membantu menulis, merangkum, menjelaskan, dan menggunakan konteks Vault bila relevan.\n\nAturan data Vault:\n- Konteks di bawah hanya milik pengguna ini.\n- Jangan mengarang file atau isi yang tidak ada.\n- Jika pertanyaan berkaitan dengan Vault, sebutkan nama item yang relevan dan jelaskan bila tidak ada hasil.\n- Jangan menghapus, mengubah, atau mengklaim telah melakukan tindakan pada data.\n- Jawab dalam bahasa Indonesia kecuali pengguna meminta bahasa lain.\n\nKONTEKS VAULT PENGGUNA:\n${context||"(Belum ada item.)"}\n\nPERTANYAAN PENGGUNA:\n${question}`;
+    stage="menghubungi Manus";
     const created=await manus("/v2/task.create",{method:"POST",body:JSON.stringify({message:{content:prompt},locale:"id",agent_profile:"lite",hide_in_task_list:true,share_visibility:"private",title:"Vault AI Chat"})});
     const taskId=created.task_id;
     if(!taskId) throw new Error("Manus tidak mengembalikan task_id.");
     const deadline=Date.now()+55000;
+    stage="menunggu jawaban Manus";
     while(Date.now()<deadline){
       const result=await manus(`/v2/task.listMessages?task_id=${encodeURIComponent(taskId)}&order=desc&limit=50`);
       const answer=extractAssistantText(result.messages??result.data??[]);
@@ -60,6 +65,7 @@ Deno.serve(async(req:Request)=>{
     return json({error:"AI masih memproses. Tunggu sebentar lalu kirim pertanyaan lagi.",task_id:taskId},504);
   }catch(error){
     console.error(error);
-    return json({error:error instanceof Error?error.message:"Gagal menghubungi AI."},500);
+    const message=error instanceof Error?error.message:"Gagal menghubungi AI.";
+    return json({error:`AI gagal pada tahap ${stage}: ${message}`},500);
   }
 });
