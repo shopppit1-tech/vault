@@ -1,4 +1,4 @@
-const CACHE_NAME = "vault-pwa-v1";
+const CACHE_NAME = "vault-pwa-v2";
 const APP_SHELL = [
   "./",
   "./index.html",
